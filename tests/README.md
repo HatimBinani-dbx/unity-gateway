@@ -25,7 +25,24 @@ mocks, monkeypatching, fake binaries/services, or fabricated ug state.
 | Existing e2e | `test_e2e*.py` | Real workspace behavior with some patched setup/internal calls |
 | Connector skill behavior | `connector_behavior/test_*.py` | Real Claude decisions with generated guidance and synthetic connector tools |
 | Integration CUJs | `integration/test_*.py` | Public configure, TUI, script, command, protocol, and lifecycle journeys |
+| MDM provisioning | `e2e_mdm/test_mdm_provision.py` | Root provisioning by an admin, then sudo-less agent launches (see below) |
 | Installation | `integration/test_installation.py` | Fresh installed package, CLI, and local helpers without credentials on Linux and advisory native Windows |
+
+## MDM provisioning E2E
+
+`e2e_mdm/` runs the MDM flow on a disposable Linux or macOS host: a fresh admin user with passwordless
+sudo runs the provisioning script (`e2e_mdm/linux-provision.sh`, a twin of
+`scripts/mdm/macos-provision.sh`, or the macOS script itself), the machine-wide files are checked, the
+user's sudo is removed, and `UG_SKIP_OS_SETTINGS=1 ug claude` / `ug codex` run headless. Nothing may
+ask for a password (`sudo -n`, no stdin, no tty, and a `SUDO_ASKPASS` trap that records any prompt), and
+the launches must leave every machine-wide file byte- and stat-identical and write only user-owned
+files in the user's home.
+
+It creates a user and writes `/etc` and `/usr/local`, so it is skipped unless `UG_MDM_E2E=1`, and is
+excluded from the default `pytest` run. Inputs: `UG_MDM_E2E_WORKSPACE`, `UG_MDM_E2E_CLIENT_ID`,
+`UG_MDM_E2E_CLIENT_SECRET`, `UG_MDM_E2E_SCOPE` (default `all-apis`), and `UG_INSTALL_SPEC` to install
+the checkout instead of `main`. Run it with
+`pytest -c tests/e2e_mdm/pytest.ini --confcutdir=tests/e2e_mdm --rootdir=. tests/e2e_mdm`.
 
 `test_budget.py` covers the workspace-authenticated spend-status client in
 `src/ucode/budget.py`:

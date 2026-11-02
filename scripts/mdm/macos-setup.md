@@ -48,7 +48,7 @@ A service principal is used only while the Jamf policy runs, to download the wor
    policy run only reads the coding-agent config and lists models.
 3. On its **Secrets** tab, choose **Generate secret** with a short lifetime, and copy the client id
    and secret. The secret is shown only once. The script requests the `all-apis` OAuth scope, so
-   the client needs it.
+   the client needs it. Optional parameter 7 overrides the requested scope(s), space separated.
 4. Check that it can see your models. With a token for the service principal:
 
    ```bash

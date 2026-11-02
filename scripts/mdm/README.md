@@ -18,6 +18,9 @@ The script authenticates `ug configure` with a short-lived token for a service p
 client id and secret come in as policy parameters; neither the credentials nor the token are
 written to disk. See [macos-setup.md](macos-setup.md) for the full setup.
 
+`tests/e2e_mdm` runs this flow in CI. It sets `UG_INSTALL_SPEC` to install a checkout instead of
+the repository's main branch, and parameter 7 to choose the OAuth scope.
+
 ## Known gap
 
 `macos-provision.sh` requests an `all-apis` token for the service principal, which

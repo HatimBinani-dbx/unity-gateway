@@ -558,6 +558,50 @@ jobs:
             ${{ runner.temp }}/ug-integration/artifacts/
             ${{ runner.temp }}/ug-integration/wheels/
 
+  # Non-blocking pending stabilization: absent from the cujs `needs`. It creates a user and writes
+  # /etc and /usr/local, which hosted runners (ephemeral, passwordless sudo) allow. The macOS row
+  # runs the real scripts/mdm/macos-provision.sh; macOS hosted runners have never been used here
+  # and may be unavailable to the org, so it is advisory: delete that matrix row to drop it.
+  mdm-provision:
+    name: MDM provisioning · ${{ matrix.os == 'macos-14' && 'macOS' || 'Linux' }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.advisory }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            advisory: false
+          - os: macos-14
+            advisory: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+        with:
+          version: 0.13.5
+          enable-cache: ${{ inputs.ref == '' }}
+      - name: Provision as an admin, demote the user, launch Claude and Codex
+        shell: bash
+        env:
+          UG_MDM_E2E: '1'
+          UG_MDM_E2E_WORKSPACE: ${{ secrets.E2E_ADMIN_WORKSPACE }}
+          UG_MDM_E2E_CLIENT_ID: ${{ secrets.E2E_ADMIN_SP_CLIENT_ID }}
+          UG_MDM_E2E_CLIENT_SECRET: ${{ secrets.E2E_ADMIN_SP_CLIENT_SECRET }}
+          # The scope the provisioning service principal requests. Only all-apis works end to end
+          # today: with narrower scopes the token is issued but model discovery is empty, so
+          # agents are skipped. Once that is fixed server-side, change this to the intended
+          #   ai-gateway unity-catalog
+          UG_MDM_E2E_SCOPE: all-apis
+          UG_INSTALL_SPEC: ${{ github.workspace }}
+        run: |
+          uv run --no-project --python 3.12 --with pytest pytest \
+            -c tests/e2e_mdm/pytest.ini --confcutdir=tests/e2e_mdm --rootdir=. tests/e2e_mdm -v
+
   dedicated-cuj-plan:
     name: Plan E2E CUJs
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}

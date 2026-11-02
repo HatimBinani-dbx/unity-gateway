@@ -12,6 +12,10 @@
 #   $4  Databricks workspace URL, e.g. https://myws.cloud.databricks.com
 #   $5  Service principal OAuth client id
 #   $6  Service principal OAuth client secret
+#   $7  Optional OAuth scope(s), space separated (default: all-apis)
+#
+# Set UG_INSTALL_SPEC to a uv tool spec to install ug from somewhere other
+# than the repository's main branch, e.g. a local checkout.
 #
 # The token is used for this run only; developers sign in with their own
 # OAuth. Needs access to PyPI, GitHub, astral.sh and downloads.claude.ai.
@@ -21,10 +25,12 @@ umask 022
 export HOME=/var/root
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 WORKSPACE="${4%/}"
+SCOPE="${7:-all-apis}"
 PREFIX=/usr/local/unity-gateway
 CLAUDE_RELEASES=https://downloads.claude.ai/claude-code-releases
 CODEX_RELEASES=https://github.com/openai/codex/releases/latest/download
 UG_REPO=https://github.com/databricks/unity-gateway
+UG_INSTALL_SPEC="${UG_INSTALL_SPEC:-git+$UG_REPO}"
 UV_URL=https://astral.sh/uv/install.sh
 CLI_URL=https://raw.githubusercontent.com
 CLI_URL="$CLI_URL/databricks/setup-cli/main/install.sh"
@@ -51,7 +57,7 @@ if ! command -v uv >/dev/null; then
   curl -LsSf "$UV_URL" \
     | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 fi
-uv tool install --force "git+$UG_REPO"
+uv tool install --force "$UG_INSTALL_SPEC"
 
 if [ ! -x /usr/local/bin/databricks ]; then
   curl -fsSL "$CLI_URL" | sh
@@ -90,7 +96,7 @@ fi
 resp="$(printf 'user = "%s:%s"\n' "$5" "$6" \
   | curl -sS -K - \
       -d grant_type=client_credentials \
-      -d scope=all-apis \
+      --data-urlencode "scope=$SCOPE" \
       "$WORKSPACE/oidc/v1/token")"
 if ! DATABRICKS_BEARER="$(printf '%s' "$resp" \
     | plutil -extract access_token raw -o - -)"; then
