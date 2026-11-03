@@ -2,8 +2,9 @@
 #
 # macOS MDM provisioning script, written for Jamf Pro policies: install
 # ug, the Databricks CLI, Claude Code and Codex machine-wide and run
-# `ug configure` as root, which installs the workspace policy at
-# /etc/unitygateway/managed-settings.json.
+# `ug configure` as root, which writes the workspace policy at
+# /etc/unitygateway/managed-settings.json and the Claude Code and Codex
+# managed settings.
 # Users then launch with no sudo:
 #
 #   UG_SKIP_OS_SETTINGS=1 ug claude    (or: ug codex)

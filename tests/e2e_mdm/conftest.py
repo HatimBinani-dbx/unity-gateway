@@ -26,9 +26,8 @@ ROOT = HERE.parent.parent
 USER = "ugmdm"
 HOME = Path("/Users" if DARWIN else "/home") / USER
 SUDOERS = Path("/etc/sudoers.d") / f"ug-mdm-e2e-{USER}"
-PROVISION_SCRIPT = Path(
-    os.environ.get("UG_MDM_E2E_SCRIPT")
-    or (ROOT / "scripts/mdm/macos-provision.sh" if DARWIN else HERE / "linux-provision.sh")
+PROVISION_SCRIPT = (
+    ROOT / "scripts/mdm/macos-provision.sh" if DARWIN else HERE / "linux-provision.sh"
 )
 MACHINE_WIDE_ROOTS = (
     Path("/etc/unitygateway"),
@@ -107,11 +106,13 @@ class Run:
     output: str
 
 
+# The client secret and every minted bearer, masked in any output a failure prints.
+SECRETS = [os.environ.get("UG_MDM_E2E_CLIENT_SECRET", "")]
+
+
 def scrub(text: str) -> str:
-    for name in ("UG_MDM_E2E_CLIENT_SECRET", "UG_MDM_E2E_BEARER"):
-        value = os.environ.get(name)
-        if value:
-            text = text.replace(value, "***")
+    for value in filter(None, SECRETS):
+        text = text.replace(value, "***")
     return text
 
 
@@ -173,8 +174,6 @@ class Machine:
     def mint_bearer(self) -> str:
         # Stands in for the developer's own OAuth sign-in, which has all-apis; only this token,
         # never the client secret, reaches the demoted user.
-        if os.environ.get("UG_MDM_E2E_BEARER"):
-            return os.environ["UG_MDM_E2E_BEARER"]
         basic = b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
         body = urllib.parse.urlencode({"grant_type": "client_credentials", "scope": "all-apis"})
         request = urllib.request.Request(
@@ -183,7 +182,9 @@ class Machine:
             headers={"Authorization": f"Basic {basic}"},
         )
         with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
-            return json.load(response)["access_token"]
+            token = json.load(response)["access_token"]
+        SECRETS.append(token)
+        return token
 
 
 def snapshot(roots) -> dict:
