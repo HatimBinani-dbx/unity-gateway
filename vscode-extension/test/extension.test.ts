@@ -177,6 +177,14 @@ describe("readConfig", () => {
     assert.equal(readConfig(JSON.stringify({ ...config, headers: ["X-Team"] })).headers, undefined);
   });
 
+  it("keeps a well-formed trace receiver setting only", () => {
+    const base = { workspace: "https://ws", authCommand: "ug auth-token", models: [] };
+    assert.deepEqual(readConfig(JSON.stringify({ ...base, otel: { port: 4555, secret: "s3_c-r" } })).otel, { port: 4555, secret: "s3_c-r" });
+    for (const otel of [{ port: 0, secret: "s" }, { port: 70_000, secret: "s" }, { port: 4555, secret: "a/b" }, { port: "4555", secret: "s" }, "x"]) {
+      assert.equal(readConfig(JSON.stringify({ ...base, otel })).otel, undefined, JSON.stringify(otel));
+    }
+  });
+
   it("gives no models for a missing or malformed file", () => {
     const none = { workspace: "", authCommand: "", models: [], provider: "" };
     for (const text of [undefined, "", "{", "[]", "null", '"text"']) {
