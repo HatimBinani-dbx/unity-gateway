@@ -256,7 +256,9 @@ def create_user() -> None:
             sudo("mkdir", "-p", str(HOME))
             sudo("chown", f"{USER}:staff", str(HOME))
     else:
-        sudo("useradd", "-m", "-s", "/bin/bash", USER)
+        # GitHub's Ubuntu images keep large toolchains in /etc/skel, which `useradd -m` copies.
+        with tempfile.TemporaryDirectory() as skel:
+            sudo("useradd", "-m", "-k", skel, "-s", "/bin/bash", USER)
 
 
 @pytest.fixture(scope="module")
