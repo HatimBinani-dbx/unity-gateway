@@ -68,10 +68,9 @@ PASSTHROUGH = (
 )
 SAFE_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
-# Scope the provisioning service principal requests, space separated. Only all-apis works end to
-# end today: with narrow scopes the token is issued but model discovery is empty, so agents are
-# skipped. Once the server-side fix lands, flip this (and the workflow) to the intended
-#   ai-gateway unity-catalog
+# Scope the provisioning service principal requests, space separated. The read-only
+#   ai-gateway:read unity-catalog:read
+# become the default with #1409; switch this and the workflow then.
 SCOPE = os.environ.get("UG_MDM_E2E_SCOPE", "all-apis")
 
 WALKER = r"""

@@ -586,10 +586,9 @@ jobs:
           UG_MDM_E2E_WORKSPACE: ${{ secrets.E2E_ADMIN_WORKSPACE }}
           UG_MDM_E2E_CLIENT_ID: ${{ secrets.E2E_ADMIN_SP_CLIENT_ID }}
           UG_MDM_E2E_CLIENT_SECRET: ${{ secrets.E2E_ADMIN_SP_CLIENT_SECRET }}
-          # The scope the provisioning service principal requests. Only all-apis works end to end
-          # today: with narrower scopes the token is issued but model discovery is empty, so
-          # agents are skipped. Once that is fixed server-side, change this to the intended
-          #   ai-gateway unity-catalog
+          # The scope the provisioning service principal requests. Switch to the read-only
+          #   ai-gateway:read unity-catalog:read
+          # once #1409 makes them the provisioning script's default.
           UG_MDM_E2E_SCOPE: all-apis
           UG_INSTALL_SPEC: ${{ github.workspace }}
         run: |
