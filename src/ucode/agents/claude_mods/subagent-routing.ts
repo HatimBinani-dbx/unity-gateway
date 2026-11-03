@@ -108,7 +108,9 @@ export const registerSubagentRouting = (on: On, options: PluginOptions): void =>
     try {
       const session_id = await $.session.id()
       const result = await $.process.run(command, {
-        stdin: JSON.stringify({ session_id, tool_use_id, tool_name: tool, tool_input: input }),
+        // agentId names the calling subagent's loop and is absent on the main loop, so the
+        // router attributes the request to the subagent that made it.
+        stdin: JSON.stringify({ session_id, agent_id: agentId, tool_use_id, tool_name: tool, tool_input: input }),
         timeoutMs: 35000,
       })
       if (result.exitCode !== 0) throw new Error('Router command failed')

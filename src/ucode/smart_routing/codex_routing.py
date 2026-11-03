@@ -14,7 +14,7 @@ import re
 # ``codex_routing.urllib.request`` — the actual call lives in ``routing``, but
 # Python modules are singletons so patching this name patches the one call site.
 import urllib.request  # noqa: F401
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from typing import Any
 
@@ -48,11 +48,14 @@ def request_routing_decision(
     *,
     timeout: float = REQUEST_TIMEOUT_S,
     log: Callable[[str], None] | None = None,
+    attribution_headers: Mapping[str, str] | None = None,
 ) -> tuple[RoutingDecision | None, str | None]:
     """Ask the router for a servable Codex model."""
     route_options = routing.route_options_for(available_models, "codex")
     if not route_options:
         return None, "no cached model services are available"
+    if attribution_headers is None:
+        attribution_headers = routing.attribution_headers("codex")
     router_name = routing.configured_router_name()
     if log is not None:
         payload = {
@@ -71,6 +74,7 @@ def request_routing_decision(
         route_options,
         router_name=router_name,
         timeout=timeout,
+        attribution_headers=attribution_headers,
     )
 
 
@@ -85,6 +89,11 @@ def route_pre_tool_use(
 ) -> dict[str, Any] | None:
     """Route one Codex ``spawn_agent`` call and rewrite its model."""
     record = None
+    attribution = routing.attribution_headers(
+        "codex",
+        session_id=payload.get("session_id"),
+        agent_id=payload.get("agent_id"),
+    )
     if audit_decision:
 
         def record(payload, task, decision, requested):
@@ -105,7 +114,12 @@ def route_pre_tool_use(
         payload,
         is_spawn_agent=is_spawn_agent_tool,
         decision_fn=lambda task: request_routing_decision(
-            workspace, token, task, available_models, timeout=timeout
+            workspace,
+            token,
+            task,
+            available_models,
+            timeout=timeout,
+            attribution_headers=attribution,
         ),
         default_task_label="Codex subagent task",
         model_id_mapper=codex_model_id,

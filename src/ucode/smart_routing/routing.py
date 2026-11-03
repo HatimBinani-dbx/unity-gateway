@@ -19,13 +19,14 @@ import time
 import urllib.error
 import urllib.request
 import uuid
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from ucode.smart_routing.rationale import format_rationale
-from ucode.ug_headers import ug_headers
+from ucode.telemetry import ucode_user_agent, ug_version
+from ucode.ug_headers import parse_header_line, ug_headers
 from ucode.workspace import workspace_headers
 
 ROUTER_NAME = "stable"
@@ -201,6 +202,56 @@ def route_options_for(models: Iterable[str], harness: str) -> list[tuple[str, st
     return [(model, harness) for model in dict.fromkeys(models)]
 
 
+_SURFACE_HEADER_NAMES = frozenset(
+    {
+        "user-agent",
+        "databricks-custom-coding-agent",
+        "databricks-custom-client-surfaces",
+        "originator",
+    }
+)
+# Session and subagent headers the AI Gateway reads, per harness. Codex's are the generic names.
+_SESSION_AND_AGENT_HEADERS = {
+    "claude": ("x-claude-code-session-id", "x-claude-code-agent-id"),
+    "codex": ("session-id", "thread-id"),
+}
+
+
+def attribution_headers(
+    harness: str,
+    *,
+    session_id: Any = None,
+    agent_id: Any = None,
+    harness_custom_headers: str | None = None,
+) -> dict[str, str]:
+    """Headers that attribute a routing call to the harness session and subagent that made it.
+
+    Session and agent IDs come from the hook payload that triggered the call. Surface headers
+    (User-Agent, originator, and the Databricks custom ones) are copied from the harness's own
+    ``ANTHROPIC_CUSTOM_HEADERS`` lines, which its inference requests send. Without a harness
+    value, the User-Agent names ucode. Absent or unsendable values are omitted, never sent empty.
+    """
+    surface: dict[str, tuple[str, str]] = {}
+    for line in (harness_custom_headers or "").splitlines():
+        parsed = parse_header_line(line)
+        if parsed and parsed[0].casefold() in _SURFACE_HEADER_NAMES:
+            surface[parsed[0].casefold()] = parsed
+    if "user-agent" not in surface:
+        surface["user-agent"] = ("User-Agent", ucode_user_agent(ug_version()))
+
+    session_name, agent_name = _SESSION_AND_AGENT_HEADERS[harness]
+    identity = {
+        session_name: session_id,
+        agent_name: agent_id,
+    }
+    headers = dict(surface.values())
+    for name, value in identity.items():
+        parsed = parse_header_line(f"{name}: {value}") if isinstance(value, str) else None
+        if parsed:
+            headers[parsed[0]] = parsed[1]
+    return headers
+
+
 def select_route(
     workspace: str,
     token: str,
@@ -209,13 +260,16 @@ def select_route(
     *,
     router_name: str,
     timeout: float = REQUEST_TIMEOUT_S,
+    attribution_headers: Mapping[str, str] | None = None,
 ) -> tuple[RoutingDecision | None, str | None]:
     """POST one ``routes:select`` request and return the router's pick.
 
     ``route_options`` are ``(model, harness)`` pairs sent as given. The gateway
     canonicalizes model names itself and returns the option it was sent, so a
-    pick that was not offered is rejected. Returns ``(decision, error)``; a
-    failed call yields ``(None, reason)`` so callers can fail open.
+    pick that was not offered is rejected. ``attribution_headers`` (see
+    :func:`attribution_headers`) let the gateway attribute the call to the
+    harness session. Returns ``(decision, error)``; a failed call yields
+    ``(None, reason)`` so callers can fail open.
     """
     offered_routes = tuple(route_options)
     body = {
@@ -228,7 +282,10 @@ def select_route(
     request = urllib.request.Request(
         workspace.rstrip("/") + ROUTING_PATH,
         data=json.dumps(body).encode("utf-8"),
+        # Attribution goes first so a UG_HEADERS line can override it; ug's own headers and
+        # Authorization come after, so they always win.
         headers={
+            **(attribution_headers or {}),
             **ug_headers(),
             **workspace_headers(workspace),
             "Authorization": f"Bearer {token}",
